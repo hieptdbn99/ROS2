@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Turtle WebSocket Controller</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .connection-settings {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        button {
+            padding: 15px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .move-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .move-btn:hover {
+            background-color: #45a049;
+        }
+        .stop-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .stop-btn:hover {
+            background-color: #da190b;
+        }
+        .connect-btn {
+            background-color: #008CBA;
+            color: white;
+            margin: 10px 0;
+        }
+        .connect-btn:hover {
+            background-color: #007B9A;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            height: 200px;
+            overflow-y: scroll;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .slider-container {
+            margin: 15px 0;
+        }
+        .slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+        label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐢 Remote Turtle WebSocket Controller</h1>
+        
+        <div class="connection-settings">
+            <h3>Connection Settings:</h3>
+            <label for="serverIP">Server IP Address:</label>
+            <input type="text" id="serverIP" placeholder="192.168.1.100" value="localhost">
+            
+            <label for="serverPort">Port:</label>
+            <input type="text" id="serverPort" placeholder="8765" value="8765">
+            
+            <div style="margin-top: 10px;">
+                <small>
+                    <strong>Examples:</strong><br>
+                    • Local testing: localhost or 127.0.0.1<br>
+                    • Remote PC: 192.168.1.100 (replace with actual IP)<br>
+                    • VM or different network: check your network configuration
+                </small>
+            </div>
+        </div>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <button id="connectBtn" class="connect-btn">Connect to WebSocket</button>
+        
+        <div class="slider-container">
+            <label for="linearSpeed">Linear Speed:</label>
+            <input type="range" id="linearSpeed" class="slider" min="0" max="3" step="0.1" value="1.0">
+            <span id="linearValue">1.0</span>
+        </div>
+        
+        <div class="slider-container">
+            <label for="angularSpeed">Angular Speed:</label>
+            <input type="range" id="angularSpeed" class="slider" min="0" max="3" step="0.1" value="1.0">
+            <span id="angularValue">1.0</span>
+        </div>
+        
+        <div class="controls">
+            <button class="move-btn" onclick="sendCommand('turn_left')">↶ Turn Left</button>
+            <button class="move-btn" onclick="sendCommand('forward')">↑ Forward</button>
+            <button class="move-btn" onclick="sendCommand('turn_right')">↷ Turn Right</button>
+            
+            <div></div>
+            <button class="stop-btn" onclick="sendCommand('stop')">⏹ STOP</button>
+            <div></div>
+            
+            <div></div>
+            <button class="move-btn" onclick="sendCommand('backward')">↓ Backward</button>
+            <div></div>
+        </div>
+        
+        <h3>Custom Command:</h3>
+        <div style="margin: 10px 0;">
+            <label>Linear: </label>
+            <input type="number" id="customLinear" step="0.1" value="0.0" style="width: 80px;">
+            <label style="margin-left: 20px;">Angular: </label>
+            <input type="number" id="customAngular" step="0.1" value="0.0" style="width: 80px;">
+            <button class="move-btn" onclick="sendCustomCommand()" style="margin-left: 20px;">Send Custom</button>
+        </div>
+        
+        <h3>Log:</h3>
+        <div id="log" class="log"></div>
+        
+        <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
+            <h4>Setup Instructions for Remote Control:</h4>
+            <ol>
+                <li><strong>Find the ROS2 PC's IP address:</strong>
+                    <pre>ip addr show | grep inet</pre>
+                </li>
+                <li><strong>Make sure firewall allows port 8765:</strong>
+                    <pre>sudo ufw allow 8765</pre>
+                </li>
+                <li><strong>Start your ROS2 node:</strong>
+                    <pre>ros2 run my_robot_controller demo_node</pre>
+                </li>
+                <li><strong>Enter the IP address above and click Connect</strong></li>
+                <li><strong>Optional:</strong> Start turtle simulator to see the turtle move:
+                    <pre>ros2 run turtlesim turtlesim_node</pre>
+                </li>
+            </ol>
+            <p><strong>Current WebSocket URL:</strong> <span id="currentUrl">ws://localhost:8765</span></p>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+        
+        const statusDiv = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const logDiv = document.getElementById('log');
+        const linearSpeedSlider = document.getElementById('linearSpeed');
+        const angularSpeedSlider = document.getElementById('angularSpeed');
+        const linearValueSpan = document.getElementById('linearValue');
+        const angularValueSpan = document.getElementById('angularValue');
+        const serverIPInput = document.getElementById('serverIP');
+        const serverPortInput = document.getElementById('serverPort');
+        const currentUrlSpan = document.getElementById('currentUrl');
+        
+        // Update slider values
+        linearSpeedSlider.oninput = function() {
+            linearValueSpan.textContent = this.value;
+        }
+        
+        angularSpeedSlider.oninput = function() {
+            angularValueSpan.textContent = this.value;
+        }
+        
+        // Update URL display when IP or port changes
+        serverIPInput.oninput = updateUrlDisplay;
+        serverPortInput.oninput = updateUrlDisplay;
+        
+        function updateUrlDisplay() {
+            const ip = serverIPInput.value || 'localhost';
+            const port = serverPortInput.value || '8765';
+            currentUrlSpan.textContent = `ws://${ip}:${port}`;
+        }
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(connected) {
+            isConnected = connected;
+            if (connected) {
+                statusDiv.textContent = 'Connected';
+                statusDiv.className = 'status connected';
+                connectBtn.textContent = 'Disconnect';
+                connectBtn.style.backgroundColor = '#dc3545';
+            } else {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'status disconnected';
+                connectBtn.textContent = 'Connect to WebSocket';
+                connectBtn.style.backgroundColor = '#008CBA';
+            }
+        }
+        
+        function connect() {
+            if (isConnected && ws) {
+                ws.close();
+                return;
+            }
+            
+            const ip = serverIPInput.value || 'localhost';
+            const port = serverPortInput.value || '8765';
+            const wsUrl = `ws://${ip}:${port}`;
+            
+            try {
+                log(`Attempting to connect to ${wsUrl}...`);
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function(event) {
+                    log('WebSocket connected successfully!');
+                    updateStatus(true);
+                };
+                
+                ws.onmessage = function(event) {
+                    log(`Received: ${event.data}`);
+                };
+                
+                ws.onclose = function(event) {
+                    log(`WebSocket connection closed (Code: ${event.code})`);
+                    updateStatus(false);
+                };
+                
+                ws.onerror = function(error) {
+                    log(`WebSocket error: Connection failed to ${wsUrl}`);
+                    log('Check that the ROS2 node is running and IP/port are correct');
+                    updateStatus(false);
+                };
+                
+            } catch (error) {
+                log(`Connection error: ${error}`);
+                updateStatus(false);
+            }
+        }
+        
+        function sendCommand(command) {
+            if (!isConnected || !ws) {
+                log('Not connected to WebSocket!');
+                return;
+            }
+            
+            let linear = 0;
+            let angular = 0;
+            
+            const linearSpeed = parseFloat(linearSpeedSlider.value);
+            const angularSpeed = parseFloat(angularSpeedSlider.value);
+            
+            switch(command) {
+                case 'forward':
+                    linear = linearSpeed;
+                    break;
+                case 'backward':
+                    linear = -linearSpeed;
+                    break;
+                case 'turn_left':
+                    angular = angularSpeed;
+                    break;
+                case 'turn_right':
+                    angular = -angularSpeed;
+                    break;
+                case 'stop':
+                    linear = 0;
+                    angular = 0;
+                    break;
+            }
+            
+            const message = JSON.stringify({
+                linear: linear,
+                angular: angular
+            });
+            
+            ws.send(message);
+            log(`Sent: ${message}`);
+        }
+        
+        function sendCustomCommand() {
+            if (!isConnected || !ws) {
+                log('Not connected to WebSocket!');
+                return;
+            }
+            
+            const linear = parseFloat(document.getElementById('customLinear').value) || 0;
+            const angular = parseFloat(document.getElementById('customAngular').value) || 0;
+            
+            const message = JSON.stringify({
+                linear: linear,
+                angular: angular
+            });
+            
+            ws.send(message);
+            log(`Sent custom: ${message}`);
+        }
+        
+        // Keyboard controls
+        document.addEventListener('keydown', function(event) {
+            if (!isConnected) return;
+            
+            switch(event.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    event.preventDefault();
+                    sendCommand('forward');
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    event.preventDefault();
+                    sendCommand('backward');
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    event.preventDefault();
+                    sendCommand('turn_left');
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    event.preventDefault();
+                    sendCommand('turn_right');
+                    break;
+                case ' ':
+                    event.preventDefault();
+                    sendCommand('stop');
+                    break;
+            }
+        });
+        
+        connectBtn.addEventListener('click', connect);
+        
+        // Initial setup
+        updateUrlDisplay();
+        log('Remote WebSocket Turtle Controller ready');
+        log('Enter the IP address of your ROS2 PC and click Connect');
+    </script>
+</body>
+</html>
