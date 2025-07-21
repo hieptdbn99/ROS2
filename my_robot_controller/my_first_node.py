@@ -14,7 +14,7 @@ class WebSocketTurtle(Node):
         self.publisher = self.create_publisher(Twist, '/turtle1/cmd_vel', 10)
         self.get_logger().info('WebSocket Turtle Controller Started')
 
-    async def handler(self, websocket, path):
+    async def handler(self, websocket):
         async for message in websocket:
             self.get_logger().info(f"Received: {message}")
             try:
@@ -28,8 +28,8 @@ class WebSocketTurtle(Node):
 
 async def start_websocket_server(node):
     """Start the WebSocket server"""
-    server = await websockets.serve(node.handler, 'localhost', 8765)
-    node.get_logger().info('WebSocket server started on ws://localhost:8765')
+    server = await websockets.serve(node.handler, '0.0.0.0', 8765)  # Listen on all interfaces
+    node.get_logger().info('WebSocket server started on ws://0.0.0.0:8765')
     # Keep the server running forever
     await asyncio.Future()  # Run forever
 
